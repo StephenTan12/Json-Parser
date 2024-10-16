@@ -1,0 +1,1 @@
+go build -o ./build/json-parser ./app
