@@ -6,25 +6,6 @@ import (
 	"os"
 )
 
-const (
-	LBraces  rune = '{'
-	RBraces  rune = '}'
-	LBracket rune = '['
-	RBracket rune = ']'
-)
-
-const (
-	Quotation rune = '"'
-	Colon     rune = ':'
-	Comma     rune = ','
-)
-
-const (
-	Space   rune = ' '
-	Tab     rune = '\t'
-	Newline rune = '\n'
-)
-
 type JsonTokenizer struct {
 	filePtr         *os.File
 	currFilePointer int64
@@ -76,7 +57,8 @@ func (j *JsonTokenizer) BuildTokens() {
 		j.tokens = append(j.tokens, string(RBracket))
 		j.BuildTokens()
 	case Quotation:
-		j.tokens = append(j.tokens, string(Quotation), j.GetValue(true))
+		value, _ := j.GetValue(true)
+		j.tokens = append(j.tokens, string(Quotation), value, string(Quotation))
 		j.BuildTokens()
 	case Colon:
 		j.tokens = append(j.tokens, string(Colon))
@@ -91,34 +73,39 @@ func (j *JsonTokenizer) BuildTokens() {
 	case Newline:
 		j.BuildTokens()
 	default:
-		j.tokens = append(j.tokens, j.GetValue(false))
+		j.currFilePointer -= 1
+		value, _ := j.GetValue(false)
+		j.tokens = append(j.tokens, value)
+		j.BuildTokens()
 	}
 }
 
-func (j *JsonTokenizer) GetValue(fromQuotes bool) string {
+func (j *JsonTokenizer) GetValue(fromQuotes bool) (string, string) {
 	value := make([]byte, 0)
 
 	for {
 		_, err := j.filePtr.ReadAt(j.buffer, j.currFilePointer)
 		if err != nil {
 			if err == io.EOF {
-				return string(value)
+				return string(value), ""
 			}
 			fmt.Println(err)
-			return string(value)
+			return string(value), ""
 		}
 
 		char := rune(j.buffer[0])
 
 		if fromQuotes && char == '"' {
-			return string(value)
-		}
-		if !fromQuotes && (j.IsObject(char) || j.IsPunctuation(char) || j.IsWhitespace(char)) {
-			return string(value)
+			j.currFilePointer += 1
+			return string(value), string(Quotation)
 		}
 
-		value = append(value, j.buffer[0])
+		if !fromQuotes && (j.IsObject(char) || j.IsPunctuation(char) || j.IsWhitespace(char)) {
+			return string(value), ""
+		}
+
 		j.currFilePointer += 1
+		value = append(value, j.buffer[0])
 	}
 }
 

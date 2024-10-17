@@ -1,4 +1,4 @@
 # JSON Parser
 
 ## Description
-A simple JSON Parser
+A simple JSON Parser.
