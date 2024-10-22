@@ -34,6 +34,7 @@ func (j *JsonTokenizer) BuildTokens() {
 	_, err := j.filePtr.ReadAt(j.buffer, j.currFilePointer)
 	if err != nil {
 		if err == io.EOF {
+			j.tokens = append(j.tokens, "\b255")
 			return
 		}
 		fmt.Println(err)
@@ -58,7 +59,11 @@ func (j *JsonTokenizer) BuildTokens() {
 		j.BuildTokens()
 	case Quotation:
 		value, _ := j.GetValue(true)
-		j.tokens = append(j.tokens, string(Quotation), value, string(Quotation))
+		if len(value) != 0 {
+			j.tokens = append(j.tokens, string(Quotation), value, string(Quotation))
+		} else {
+			j.tokens = append(j.tokens, string(Quotation), string(Quotation))
+		}
 		j.BuildTokens()
 	case Colon:
 		j.tokens = append(j.tokens, string(Colon))

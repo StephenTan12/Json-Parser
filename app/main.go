@@ -7,15 +7,17 @@ func main() {
 	j.Init("./app/test.json")
 	j.BuildTokens()
 
-	fmt.Println(j.tokens)
+	fmt.Println("total tokens:", len(j.tokens))
+	fmt.Println("tokens: ", j.tokens)
 
 	parser := JsonParser{
-		tokens:           &j.tokens,
+		tokens:           j.tokens,
 		currTokenPointer: 0,
 	}
-	isValid := parser.ParseTokens()
-
-	fmt.Println(isValid)
+	object, isValid := parser.ParseTokens()
+	if isValid {
+		fmt.Println("valid json: ", object)
+	}
 
 	j.Close()
 }
