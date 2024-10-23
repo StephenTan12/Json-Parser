@@ -13,17 +13,17 @@ type JsonTokenizer struct {
 	tokens          []string
 }
 
-func (j *JsonTokenizer) Init(filepath string) {
+func (j *JsonTokenizer) Init(filepath string) error {
 	file, err := os.Open(filepath)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	j.filePtr = file
 	j.currFilePointer = 0
 	j.buffer = make([]byte, 1)
 	j.tokens = make([]string, 0)
+	return nil
 }
 
 func (j *JsonTokenizer) Close() {

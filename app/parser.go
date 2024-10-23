@@ -66,7 +66,7 @@ func (j *JsonParser) parseEntry() (Json, error) {
 func (j *JsonParser) parseLBraces() (JsonObject, error) {
 	object := JsonObject{}
 	already_seen_comma := false
-
+out:
 	for {
 		token, err := j.nextToken()
 		if err != nil {
@@ -77,97 +77,20 @@ func (j *JsonParser) parseLBraces() (JsonObject, error) {
 		}
 		char := rune(token[0])
 
-		if char == RBraces {
-			if j.currStack[j.currStackPointer-1] != LBraces {
-				return nil, &Error{s: "invalid json"}
+		switch char {
+		case RBraces:
+			if j.removeFromStack(LBraces) != nil {
+				return nil, err
 			}
-			j.currStack[j.currStackPointer-1] = 0
-			j.currStackPointer -= 1
-			break
-		} else if char == Quotation {
+			break out
+		case Quotation:
 			already_seen_comma = false
-			// getting key
-			token, err = j.nextToken()
+
+			key, value, err := j.parseKeyValuePair()
 			if err != nil {
 				return nil, err
 			}
-
-			key := ""
-			if len(token) > 1 || (rune(token[0]) != Quotation && len(token) == 1) {
-				key = string(token)
-				token, err = j.nextToken()
-				if err != nil {
-					return nil, err
-				}
-			}
-			if !(len(token) == 1 && rune(token[0]) == Quotation) {
-				return nil, &Error{s: "invalid json"}
-			}
-
-			token, err = j.nextToken()
-			if err != nil {
-				return nil, err
-			}
-			if rune(token[0]) != Colon {
-				return nil, err
-			}
-
-			token, err = j.nextToken()
-			if err != nil {
-				return nil, err
-			}
-
-			// getting value
-			char = rune(token[0])
-			if len(token) > 1 {
-				if token == "true" {
-					object[key] = true
-				} else if token == "false" {
-					object[key] = false
-				} else {
-					value, err := strconv.Atoi(token)
-					if err != nil {
-						return nil, err
-					}
-					object[key] = value
-				}
-			} else if char == LBraces {
-				j.currStack[j.currStackPointer] = LBraces
-				j.currStackPointer += 1
-				value, err := j.parseLBraces()
-				if err != nil {
-					return nil, err
-				}
-				object[key] = value
-			} else if char == LBracket {
-				j.currStack[j.currStackPointer] = LBracket
-				j.currStackPointer += 1
-
-				newObj, err := j.parseLBracket()
-				if err != nil {
-					return nil, err
-				}
-				object[key] = newObj
-			} else if char == Quotation {
-				token, err = j.nextToken()
-				if err != nil {
-					return nil, err
-				}
-				value := ""
-				if len(token) > 1 || (rune(token[0]) != Quotation && len(token) == 1) {
-					value = string(token)
-					token, err = j.nextToken()
-					if err != nil {
-						return nil, err
-					}
-				}
-				if !(len(token) == 1 && rune(token[0]) == Quotation) {
-					return nil, &Error{s: "invalid json"}
-				}
-				object[key] = value
-			} else {
-				return nil, &Error{s: "invalid json"}
-			}
+			object[key] = value
 
 			// check for future values?
 			token, err = j.nextToken()
@@ -175,26 +98,29 @@ func (j *JsonParser) parseLBraces() (JsonObject, error) {
 				return nil, err
 			}
 			char = rune(token[0])
-			if char == Comma {
+
+			switch char {
+			case Comma:
 				if already_seen_comma {
 					return nil, &Error{s: "invalid json"}
 				}
 				already_seen_comma = true
 				continue
-			} else if char == RBraces {
+			case RBraces:
 				if j.currStack[j.currStackPointer-1] != LBraces {
 					return nil, &Error{s: "invalid json"}
 				}
 				j.currStack[j.currStackPointer-1] = 0
 				j.currStackPointer -= 1
-				break
-			} else {
+				break out
+			default:
 				return nil, &Error{s: "invalid json"}
 			}
-		} else {
+		default:
 			return nil, &Error{s: "invalid json"}
 		}
 	}
+
 	if already_seen_comma {
 		return nil, &Error{s: "invalid json"}
 	}
@@ -205,7 +131,7 @@ func (j *JsonParser) parseLBraces() (JsonObject, error) {
 func (j *JsonParser) parseLBracket() (JsonArray, error) {
 	object := JsonArray{}
 	already_seen_comma := false
-
+out:
 	for {
 		token, err := j.nextToken()
 		if err != nil {
@@ -214,7 +140,6 @@ func (j *JsonParser) parseLBracket() (JsonArray, error) {
 			}
 			return nil, err
 		}
-		char := rune(token[0])
 
 		if len(token) > 1 {
 			if token == "true" {
@@ -228,38 +153,31 @@ func (j *JsonParser) parseLBracket() (JsonArray, error) {
 				}
 				object = append(object, value)
 			}
-		} else if char == RBracket {
-			if j.currStack[j.currStackPointer-1] != LBracket {
-				return nil, &Error{s: "invalid json"}
+			already_seen_comma = false
+			continue
+		}
+
+		char := rune(token[0])
+		switch char {
+		case RBracket:
+			if j.removeFromStack(LBracket) != nil {
+				return nil, err
 			}
-			j.currStack[j.currStackPointer-1] = 0
-			j.currStackPointer -= 1
-			break
-		} else if char == Quotation {
+			break out
+		case Quotation:
 			// getting element
-			token, err = j.nextToken()
+			element, err := j.parseString()
 			if err != nil {
 				return nil, err
 			}
-			element := ""
-			if len(token) > 1 || (rune(token[0]) != Quotation && len(token) == 1) {
-				element = string(token)
-				token, err = j.nextToken()
-				if err != nil {
-					return nil, err
-				}
-			}
-			if !(len(token) == 1 && rune(token[0]) == Quotation) {
-				return nil, &Error{s: "invalid json"}
-			}
 			object = append(object, element)
-		} else if char == Comma {
+		case Comma:
 			if len(object) < 1 || already_seen_comma {
 				return nil, &Error{s: "invalid json"}
 			}
 			already_seen_comma = true
 			continue
-		} else if char == LBracket {
+		case LBracket:
 			j.currStack[j.currStackPointer] = LBracket
 			j.currStackPointer += 1
 			newObject, err := j.parseLBracket()
@@ -267,7 +185,7 @@ func (j *JsonParser) parseLBracket() (JsonArray, error) {
 				return nil, err
 			}
 			object = append(object, newObject)
-		} else if char == LBraces {
+		case LBraces:
 			j.currStack[j.currStackPointer] = LBraces
 			j.currStackPointer += 1
 			newObject, err := j.parseLBraces()
@@ -275,7 +193,7 @@ func (j *JsonParser) parseLBracket() (JsonArray, error) {
 				return nil, err
 			}
 			object = append(object, newObject)
-		} else {
+		default:
 			return nil, &Error{s: "invalid json"}
 		}
 		already_seen_comma = false
@@ -288,8 +206,123 @@ func (j *JsonParser) parseLBracket() (JsonArray, error) {
 	return object, nil
 }
 
+func (j *JsonParser) parseKeyValuePair() (string, Json, error) {
+	// getting key
+	key, err := j.parseString()
+	if err != nil {
+		return "", nil, err
+	}
+
+	token, err := j.nextToken()
+	if err != nil {
+		return "", nil, err
+	}
+	if rune(token[0]) != Colon {
+		return "", nil, err
+	}
+
+	// getting value
+	value, err := j.parseValue()
+	if err != nil {
+		return "", nil, err
+	}
+	return key, value, err
+}
+
+func (j *JsonParser) parseString() (string, error) {
+	token, err := j.nextToken()
+	if err != nil {
+		return "", err
+	}
+
+	key := ""
+	if len(token) > 1 || (rune(token[0]) != Quotation && len(token) == 1) {
+		key = string(token)
+		token, err = j.nextToken()
+		if err != nil {
+			return "", err
+		}
+	}
+	if !(len(token) == 1 && rune(token[0]) == Quotation) {
+		return "", &Error{s: "invalid json"}
+	}
+
+	return key, nil
+}
+
+func (j *JsonParser) parseValue() (Json, error) {
+	token, err := j.nextToken()
+	if err != nil {
+		return "", err
+	}
+
+	if len(token) > 1 {
+		if token == "true" {
+			return true, nil
+		} else if token == "false" {
+			return false, nil
+		} else {
+			value, err := strconv.Atoi(token)
+			if err != nil {
+				return "", err
+			}
+			return value, nil
+		}
+	}
+
+	char := rune(token[0])
+	switch char {
+	case LBraces:
+		j.currStack[j.currStackPointer] = LBraces
+		j.currStackPointer += 1
+		value, err := j.parseLBraces()
+		if err != nil {
+			return nil, err
+		}
+		return value, nil
+	case LBracket:
+		j.currStack[j.currStackPointer] = LBracket
+		j.currStackPointer += 1
+
+		newObj, err := j.parseLBracket()
+		if err != nil {
+			return nil, err
+		}
+		return newObj, nil
+	case Quotation:
+		token, err = j.nextToken()
+		if err != nil {
+			return nil, err
+		}
+		value := ""
+		if len(token) > 1 || (rune(token[0]) != Quotation && len(token) == 1) {
+			value = string(token)
+			token, err = j.nextToken()
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !(len(token) == 1 && rune(token[0]) == Quotation) {
+			return nil, &Error{s: "invalid json"}
+		}
+		return value, err
+	default:
+		return nil, &Error{s: "invalid json"}
+	}
+}
+
+func (j *JsonParser) removeFromStack(element rune) error {
+	if j.currStack[j.currStackPointer-1] != element {
+		return &Error{s: "invalid json"}
+	}
+	j.currStack[j.currStackPointer-1] = 0
+	j.currStackPointer -= 1
+	return nil
+}
+
 func (j *JsonParser) nextToken() (string, error) {
 	token := (j.tokens)[j.currTokenPointer]
+	fmt.Println("token: ", token)
 	if token == "\b255" {
 		j.currTokenPointer += 1
 		return "", io.EOF
